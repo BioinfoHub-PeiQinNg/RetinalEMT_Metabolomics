@@ -22,7 +22,7 @@ data <- read_xlsx("mx_608189_Daisy Shu_human cells_ media_primary_metabolism_GC-
 metadata <- read_xlsx("mx_608189_Daisy Shu_human cells_ media_primary_metabolism_GC-TOF_MS_10-2021_submit.xlsx", sheet = "metadata")
 
 data <- data %>% 
-        rename(Metabolites = "BinBase name")
+        rename(Metabolite = "BinBase name")
 
 #export as csv format
 write.csv(data, "metabolics_raw_data.csv")
@@ -48,7 +48,19 @@ library(tibble)
 metabolomics_count_dataframe <- read_metabo(filepath = "metabolics_raw_data.csv")
 metabolomics_metadata <- read.csv("metabolics_metadata.csv")
 
+metabolomics_metadata <- mutate_if(metabolomics_metadata, is.character, as.factor) %>%subset(select = -c(X)) %>%as.data.frame()
 
+metabolomics_count_dataframe_all  <- metabolomics_count_dataframe %>% 
+                                subset(select = -c(X,ret.index,
+                                                   quant.mz,
+                                                   BB.id,
+                                                   mass.spec,
+                                                   PubChem,
+                                                   InChI.Key,
+                                                   cells,media)) %>% 
+                                                    as.tibble()
+
+#data reformatting for the purpose of PCA plot. Note PCAplot function for omu does not work too well with this dataset.
 metabolomics_count_dataframe  <- metabolomics_count_dataframe %>% 
                                 subset(select = -c(X,ret.index,
                                                    quant.mz,
@@ -57,20 +69,21 @@ metabolomics_count_dataframe  <- metabolomics_count_dataframe %>%
                                                    PubChem,
                                                    InChI.Key,
                                                    cells,media)) %>% as.tibble() %>% 
-                                    select(Metabolites,X1_001:X48_048) %>%
+                                    select(Metabolite,X1_001:X48_048) %>%
                                     tidyr::pivot_longer(X1_001:X48_048, 
                                      names_to = "Sample", values_to = "peaks" ) %>% 
-                                     tidyr::pivot_wider(names_from = Metabolites, values_from = peaks)
+                                     tidyr::pivot_wider(names_from = Metabolite, values_from = peaks)
 
 
 
-metabolomics_metadata <- metabolomics_metadata %>% 
-                        subset(select = -c(X))
+
+
+rownames(metabolomics_metadata) <- NULL
 
 comb_data <- left_join(metabolomics_count_dataframe,
                        metabolomics_metadata, 
                        by = "Sample")
-DF <- assign_hierarchy(metabolomics_count_dataframe, keep_unknowns = TRUE, identifier = "KEGG" ) 
+
 
 #Samples which are human cells 
 cells_list <- comb_data %>% 
@@ -104,7 +117,7 @@ media_comb_data <- left_join(metabolomics_count_dataframe,
                    relocate (Sample, Treatment) %>% 
                   filter(Sample %in% media_list$Sample)
 
-
+#only use up till this stage as this package is pretty useless
 ```
 
 
@@ -135,5 +148,20 @@ df_2 <- as.data.frame(pca_res_2$x) %>% rownames_to_column("Sample") %>% mutate(T
 ggplot(df_2, aes(PC1, PC2, colour = factor(Treatments))) + 
   geom_point(size = 3) +
   theme_bw() + labs(colour = "Groups")
+```
+```{r}
+DF <- assign_hierarchy(metabolomics_count_dataframe_all, keep_unknowns = TRUE, identifier = "KEGG" ) 
+
+DF_sub <- DF %>% as.data.frame() %>% mutate_if(is.character, as.factor) %>% subset(select = -c(Class,Subclass_1,Subclass_2,Subclass_3,Subclass_4))
+m
+#DF_log <- log(DF[,3,50]) %>% as_tibble() %>% mutate(Metabolite = as.character(DF$Metabolites), KEGG = as.character(DF$KEGG)) %>% relocate(Metabolite, KEGG)
+omu_summary(count_data = DF_sub , 
+            metadata = metabolomics_metadata, 
+            numerator = "Cells_Control", 
+            denominator = "Cells_TNFa", 
+            response_variable = "Metabolites", 
+            Factor = "Treatment", 
+            p_adjust = "BH", 
+            test_type = "welch")
 ```
 
