@@ -1,0 +1,84 @@
+---
+title: "Daisy Metabolomics analysis"
+author: "Pei Qin (Sabrina) Ng"
+date: "11/06/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Samples are H-RPE cells treated with TGFb2 or TNFa (cell + media metabolites)
+
+
+reformat datasets for analysis using Omu package
+```{r}
+library(readxl)
+library(dplyr)
+library(tibble)
+data <- read_xlsx("mx_608189_Daisy Shu_human cells_ media_primary_metabolism_GC-TOF_MS_10-2021_submit.xlsx", sheet = "sub")
+metadata <- read_xlsx("mx_608189_Daisy Shu_human cells_ media_primary_metabolism_GC-TOF_MS_10-2021_submit.xlsx", sheet = "metadata")
+
+data <- data %>%  rename(Metabolites = "BinBase name")
+write.csv(data, "metabolics_raw_data.csv")
+
+metadata <- t(metadata) %>% as.data.frame() %>% 
+    tibble::rownames_to_column("mx_Lane") %>%
+    select(V1,V3,V4,V2,V5) %>% 
+    tidyr::unite(Background, c(V3,V4)) %>% 
+    rename(Sample = V1, Treatment = V2, Grouped =V5)
+
+write.csv(metadata, "metabolics_metadata.csv")
+```
+
+Read reformatted CSV data into Omu.
+
+```{r}
+library(omu)
+
+metabolomics_count_dataframe <- read_metabo(filepath = "metabolics_raw_data.csv")
+metabolomics_metadata <- read.csv("metabolics_metadata.csv")
+
+
+metabolomics_count_dataframe  <- metabolomics_count_dataframe %>% 
+                                subset(select = -c(X,ret.index,
+                                                   quant.mz,
+                                                   BB.id,
+                                                   mass.spec,
+                                                   PubChem,
+                                                   InChI.Key,
+                                                   cells,media)) %>% as.tibble()
+
+metabolomics_count_dataframe_long <- metabolomics_count_dataframe %>% tidyr::pivot_longer(!c(Metabolites,KEGG), names_to = "Samples", values_to = "peaks" )
+
+metabolomics_metadata <- metabolomics_metadata %>% 
+                        subset(select = -c(X))
+
+DF <- assign_hierarchy(metabolomics_count_dataframe, keep_unknowns = TRUE, identifier = "KEGG" ) 
+
+counts_Df <- metabolomics_count_dataframe %>% 
+    subset(select = -c(Metabolites, KEGG))
+
+#metabolomics_count_dataframe_log <- log(counts_Df) %>% 
+                                    #as.tibble() %>%
+                                    #mutate(Metabolites = as.vector(metabolomics_count_dataframe$Metabolites), 
+                                                              #KEGG = as.vector(metabolomics_count_dataframe$KEGG)) %>% 
+                                    #relocate(Metabolites, KEGG) 
+
+
+```
+
+
+Split the data by:
+
+1) Cell lines
+
+2) media
+```{r}
+pca_res <- prcomp(counts_Df, scale. = TRUE)
+autoplot(pca_res, data = metabolomics_count_dataframe_long, colour = 'Samples')
+
+#PCA_plot(count_data = metabolomics_count_dataframe_log, metadata = metabolomics_metadata, variable = "Treatment", color = "Treatment", response_variable = "Metabolites")+ theme_bw() + theme(panel.grid = element_blank())
+```
+
