@@ -12,16 +12,22 @@ knitr::opts_chunk$set(echo = TRUE)
 Samples are H-RPE cells treated with TGFb2 or TNFa (cell + media metabolites)
 
 
-reformat datasets for analysis using Omu package
+Datasets were reformatted for analysis using Omu package
 ```{r}
 library(readxl)
 library(dplyr)
 library(tibble)
+
 data <- read_xlsx("mx_608189_Daisy Shu_human cells_ media_primary_metabolism_GC-TOF_MS_10-2021_submit.xlsx", sheet = "sub")
 metadata <- read_xlsx("mx_608189_Daisy Shu_human cells_ media_primary_metabolism_GC-TOF_MS_10-2021_submit.xlsx", sheet = "metadata")
 
-data <- data %>%  rename(Metabolites = "BinBase name")
+data <- data %>% 
+        rename(Metabolites = "BinBase name")
+
+#export as csv format
 write.csv(data, "metabolics_raw_data.csv")
+
+#transpose the original metadata format to suit omu package requirements
 
 metadata <- t(metadata) %>% as.data.frame() %>% 
     tibble::rownames_to_column("mx_Lane") %>%
@@ -32,10 +38,12 @@ metadata <- t(metadata) %>% as.data.frame() %>%
 write.csv(metadata, "metabolics_metadata.csv")
 ```
 
-Read reformatted CSV data into Omu.
+Reformatted data were used as input (CSV data) into Omu.
 
 ```{r}
 library(omu)
+library(dplyr)
+library(tibble)
 
 metabolomics_count_dataframe <- read_metabo(filepath = "metabolics_raw_data.csv")
 metabolomics_metadata <- read.csv("metabolics_metadata.csv")
@@ -48,23 +56,53 @@ metabolomics_count_dataframe  <- metabolomics_count_dataframe %>%
                                                    mass.spec,
                                                    PubChem,
                                                    InChI.Key,
-                                                   cells,media)) %>% as.tibble()
+                                                   cells,media)) %>% as.tibble() %>% 
+                                    select(Metabolites,X1_001:X48_048) %>%
+                                    tidyr::pivot_longer(X1_001:X48_048, 
+                                     names_to = "Sample", values_to = "peaks" ) %>% 
+                                     tidyr::pivot_wider(names_from = Metabolites, values_from = peaks)
 
-metabolomics_count_dataframe_long <- metabolomics_count_dataframe %>% tidyr::pivot_longer(!c(Metabolites,KEGG), names_to = "Samples", values_to = "peaks" )
+
 
 metabolomics_metadata <- metabolomics_metadata %>% 
                         subset(select = -c(X))
 
+comb_data <- left_join(metabolomics_count_dataframe,
+                       metabolomics_metadata, 
+                       by = "Sample")
 DF <- assign_hierarchy(metabolomics_count_dataframe, keep_unknowns = TRUE, identifier = "KEGG" ) 
 
-counts_Df <- metabolomics_count_dataframe %>% 
-    subset(select = -c(Metabolites, KEGG))
+#Samples which are human cells 
+cells_list <- comb_data %>% 
+              filter(Background == "human_cells") %>% 
+              distinct(Sample)
 
-#metabolomics_count_dataframe_log <- log(counts_Df) %>% 
-                                    #as.tibble() %>%
-                                    #mutate(Metabolites = as.vector(metabolomics_count_dataframe$Metabolites), 
-                                                              #KEGG = as.vector(metabolomics_count_dataframe$KEGG)) %>% 
-                                    #relocate(Metabolites, KEGG) 
+cells_counts_Df <- metabolomics_count_dataframe  %>% 
+                    filter(Sample %in% cells_list$Sample) %>%
+                 column_to_rownames("Sample")
+
+#for annotation
+cells_comb_data <- left_join(metabolomics_count_dataframe,
+                       metabolomics_metadata, 
+                       by = "Sample") %>% 
+    relocate (Sample, Treatment) %>% 
+             filter(Sample %in% cells_list$Sample)
+
+#Samples which are media 
+media_list <- comb_data %>% 
+              filter(Background == "human_media") %>% 
+              distinct(Sample)
+
+media_counts_Df <- metabolomics_count_dataframe  %>% 
+                    filter(Sample %in% media_list$Sample) %>%
+                 column_to_rownames("Sample")
+
+#for annotation
+media_comb_data <- left_join(metabolomics_count_dataframe,
+                       metabolomics_metadata, 
+                       by = "Sample") %>% 
+                   relocate (Sample, Treatment) %>% 
+                  filter(Sample %in% media_list$Sample)
 
 
 ```
@@ -75,10 +113,27 @@ Split the data by:
 1) Cell lines
 
 2) media
-```{r}
-pca_res <- prcomp(counts_Df, scale. = TRUE)
-autoplot(pca_res, data = metabolomics_count_dataframe_long, colour = 'Samples')
 
-#PCA_plot(count_data = metabolomics_count_dataframe_log, metadata = metabolomics_metadata, variable = "Treatment", color = "Treatment", response_variable = "Metabolites")+ theme_bw() + theme(panel.grid = element_blank())
+PCA plots for each of these group in cells
+```{r}
+pca_res <- prcomp(sqrt(cells_counts_Df), center = TRUE, scale. = TRUE)
+df <- as.data.frame(pca_res$x) %>% rownames_to_column("Sample") %>% mutate(Treatments = cells_comb_data$Treatment) %>% select(Sample,Treatments, PC1:PC24)
+
+
+ggplot(df, aes(PC1, PC2, colour = factor(Treatments))) + 
+  geom_point(size = 3) +
+  theme_bw() + labs(colour = "Groups")
+  
+#PCA_plot(count_data = cells_counts_log_Df, metadata = metabolomics_metadata, variable = "Treatment", color = "Treatment", response_variable = "Metabolites")+ theme_bw() + theme(panel.grid = element_blank())
+```
+PCA plots for each of these group in media
+```{r}
+pca_res_2 <- prcomp(sqrt(media_counts_Df), center = TRUE, scale. = TRUE)
+df_2 <- as.data.frame(pca_res_2$x) %>% rownames_to_column("Sample") %>% mutate(Treatments = media_comb_data$Treatment) %>% select(Sample,Treatments, PC1:PC23)
+
+
+ggplot(df_2, aes(PC1, PC2, colour = factor(Treatments))) + 
+  geom_point(size = 3) +
+  theme_bw() + labs(colour = "Groups")
 ```
 
