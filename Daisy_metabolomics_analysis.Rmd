@@ -58,7 +58,7 @@ metabolomics_count_dataframe_all  <- metabolomics_count_dataframe %>%
                                                    PubChem,
                                                    InChI.Key,
                                                    cells,media)) %>% 
-                                                    as.tibble()
+                                                    as.data.frame()
 
 #data reformatting for the purpose of PCA plot. Note PCAplot function for omu does not work too well with this dataset.
 metabolomics_count_dataframe  <- metabolomics_count_dataframe %>% 
@@ -149,19 +149,44 @@ ggplot(df_2, aes(PC1, PC2, colour = factor(Treatments))) +
   geom_point(size = 3) +
   theme_bw() + labs(colour = "Groups")
 ```
-```{r}
-DF <- assign_hierarchy(metabolomics_count_dataframe_all, keep_unknowns = TRUE, identifier = "KEGG" ) 
 
-DF_sub <- DF %>% as.data.frame() %>% mutate_if(is.character, as.factor) %>% subset(select = -c(Class,Subclass_1,Subclass_2,Subclass_3,Subclass_4))
-m
-#DF_log <- log(DF[,3,50]) %>% as_tibble() %>% mutate(Metabolite = as.character(DF$Metabolites), KEGG = as.character(DF$KEGG)) %>% relocate(Metabolite, KEGG)
-omu_summary(count_data = DF_sub , 
+Assigns hierarchy metadata to a metabolomics count matrix using identifier values. 
+It can assign KEGG compound hierarchy, orthology hierarchy, or organism hierarchy data.
+
+```{r}
+DF <- assign_hierarchy(metabolomics_count_dataframe_all, keep_unknowns = FALSE, identifier = "KEGG" ) 
+
+
+DF_stats <-omu_summary(count_data = DF , 
             metadata = metabolomics_metadata, 
             numerator = "Cells_Control", 
             denominator = "Cells_TNFa", 
-            response_variable = "Metabolites", 
+            response_variable = "Metabolite", 
             Factor = "Treatment", 
             p_adjust = "BH", 
             test_type = "welch")
+
+
+```
+
+Generate stats of differential comparison of metabolites detetected in Cells_TNFa vs Cells_Control
+
+```{r}
+DF_stats_counts <- count_fold_changes(count_data = DF_stats, 
+                                      column = "Class", 
+                                      sig_threshold = 0.05, 
+                                      keep_unknowns = FALSE)
+```
+
+Visualise results for Cells_TNFa vs Cells_control
+
+```{r}
+library(ggplot2)
+Class_Bar_Plot <- plot_bar(fc_data = DF_stats_counts, 
+                           fill = c("dodgerblue2", "firebrick2"), 
+                           outline_color = c("black", "black"), size = c(1,1)) + 
+                  labs(x = "Class") + 
+                  theme(panel.grid = element_blank()) + 
+                ggtitle("Metabolites comparison between Cells_TNFa vs Cells_Control")
 ```
 
