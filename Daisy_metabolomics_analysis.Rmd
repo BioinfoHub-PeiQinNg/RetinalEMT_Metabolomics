@@ -186,7 +186,7 @@ DF_stats_counts <- count_fold_changes(count_data = DF_stats,
                                       keep_unknowns = FALSE)
 ```
 
-Visualise results for Cells_TNFa vs Cells_control
+Visualise results for Cells_TNFa vs Cells_control in barplot to show comparisons of metabolites
 
 ```{r}
 library(ggplot2)
