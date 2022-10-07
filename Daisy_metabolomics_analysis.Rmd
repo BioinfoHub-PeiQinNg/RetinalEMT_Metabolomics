@@ -364,6 +364,7 @@ vol_cb_plot <- ggplot(data=DF_stats_cb,
 ```
 
 Generate code for heatmap (Cells : Control vs TNFa vs TGFb)
+issues to fix with this dataset: TNFa and TGFb must be plotted seperately as the enrichments of metabolites are different from both (see the previous comparison)
 ```{r}
 #Need to rewrite the code for the heatmap
 
@@ -393,15 +394,15 @@ DF_sub_ca <- inner_join(DF_sub, meta_sub, by = "Sample") %>%
     mutate(Treatment = factor(Treatment, levels = c("Cells_Control", "Cells_TNFa","Cells_TGFb")))
   
 
-p1 <- ggplot(DF_sub_ca, aes(x = Sample, y = Metabolite, fill = log(Counts))) +
+p1 <- ggplot(DF_sub_ca, aes(x = Sample, y = Metabolite, fill = log2(Counts))) +
   geom_tile(colour = " black") + 
-    scale_fill_gradientn(colors = rev(hcl.colors(20, "RdYlBu"))) +
+    scale_fill_gradientn(colors = rev(hcl.colors(25, "BuPu")),limits = c(0,20), breaks = c(0,5,10,15,20) )+
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
     facet_grid(~Treatment, scales='free_x', space="free_x")  #use this to categorise by groups
 
 #heatmap_carbs <- plot_heatmap(count_data = DF_sub, metadata = metabolomics_metadata, Factor = "Treatment", response_variable = "Metabolite", log_transform = TRUE, high_color = "goldenrod2", low_color = "midnightblue") + theme(axis.text.x = element_text(angle = 30, hjust=1, vjust=1, size = 6))
 ```
- with NA metabolites filtered
+ with NA metabolites filtered (maybe no need to show this to Daisy)
  
 ```{r}
 #Need to rewrite the code for the heatmap
@@ -417,7 +418,7 @@ Cells_TGFb <-c("X9_009", "X10_010","X11_011", "X12_012", "X13_013","X14_014", "X
 #generate first data subset of Cells samples only for TNFa and Controls
 DF_sub_2 <- DF_stats_ca %>% 
     tibble::as.tibble() %>% 
-    dplyr::filter(log2FoldChange > 0.5 | log2FoldChange < -0.5 & 
+    dplyr::filter(log2FoldChange > 1.0 | log2FoldChange < -1.0 & 
                padj < 0.05) %>% filter(Class != "NA") %>%
     select(Metabolite, all_of(Cells_TNFa), all_of(Cells_Control), all_of(Cells_TGFb)) %>% 
     tidyr::pivot_longer(!Metabolite, names_to = "Sample", values_to = "Counts" )
@@ -432,9 +433,9 @@ DF_sub_ca_2 <- inner_join(DF_sub_2, meta_sub, by = "Sample") %>%
     mutate(Treatment = factor(Treatment, levels = c("Cells_Control", "Cells_TNFa","Cells_TGFb")))
   
 
-p2 <- ggplot(DF_sub_ca_2, aes(x = Sample, y = Metabolite, fill = log(Counts))) +
+p2 <- ggplot(DF_sub_ca_2, aes(x = Sample, y = Metabolite, fill = log2(Counts))) +
   geom_tile(colour = " black") + 
-    scale_fill_gradientn(colors = rev(hcl.colors(20, "RdYlBu"))) +
+    scale_fill_gradientn(colors = rev(hcl.colors(25, "BuPu")),limits = c(0,20), breaks = c(0,5,10,15,20) )  + 
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
     facet_grid(~Treatment, scales='free_x', space="free_x") 
 ```
