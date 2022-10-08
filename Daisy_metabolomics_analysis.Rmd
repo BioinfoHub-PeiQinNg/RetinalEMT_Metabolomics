@@ -363,7 +363,7 @@ vol_cb_plot <- ggplot(data=DF_stats_cb,
 
 ```
 
-Generate code for heatmap (Cells : Control vs TNFa vs TGFb)
+Generate code for heatmap (Cells : Control vs TNFa)
 issues to fix with this dataset: TNFa and TGFb must be plotted seperately as the enrichments of metabolites are different from both (see the previous comparison)
 ```{r}
 #Need to rewrite the code for the heatmap
@@ -374,14 +374,14 @@ issues to fix with this dataset: TNFa and TGFb must be plotted seperately as the
 #listout samples which are for cells (control vs TNFa)
 Cells_Control <- c("X1_001","X2_002","X3_003", "X4_004", "X5_005","X6_006", "X7_007", "X8_008")
 Cells_TNFa <- c("X17_017", "X18_018","X19_019","X20_020","X21_021", "X22_022","X23_023","X24_024")
-Cells_TGFb <-c("X9_009", "X10_010","X11_011", "X12_012", "X13_013","X14_014", "X15_015", "X16_016")
+
 
 #generate first data subset of Cells samples only for TNFa and Controls
 DF_sub <- DF_stats_ca %>% 
     tibble::as.tibble() %>% 
     dplyr::filter(log2FoldChange > 1.5 | log2FoldChange < -1.5 & 
                padj < 0.05) %>%
-    select(Metabolite, all_of(Cells_TNFa), all_of(Cells_Control), all_of(Cells_TGFb)) %>% 
+    select(Metabolite, all_of(Cells_TNFa), all_of(Cells_Control)) %>% 
     tidyr::pivot_longer(!Metabolite, names_to = "Sample", values_to = "Counts" )
 
 #generate a subset of the metadata to match with the sample IDs (lazy way of labelling the columns)
@@ -390,8 +390,8 @@ meta_sub <- metabolomics_metadata %>%
 
 DF_sub_ca <- inner_join(DF_sub, meta_sub, by = "Sample") %>% 
     select(Metabolite, Sample, Treatment, Counts) %>% 
-    mutate(Sample = factor(Sample, levels = c("X1_001","X2_002","X3_003", "X4_004", "X5_005","X6_006", "X7_007", "X8_008", "X17_017", "X18_018","X19_019","X20_020","X21_021", "X22_022","X23_023","X24_024","X9_009", "X10_010","X11_011", "X12_012", "X13_013","X14_014", "X15_015", "X16_016"))) %>% 
-    mutate(Treatment = factor(Treatment, levels = c("Cells_Control", "Cells_TNFa","Cells_TGFb")))
+    mutate(Sample = factor(Sample, levels = c("X1_001","X2_002","X3_003", "X4_004", "X5_005","X6_006", "X7_007", "X8_008", "X17_017", "X18_018","X19_019","X20_020","X21_021", "X22_022","X23_023","X24_024"))) %>% 
+    mutate(Treatment = factor(Treatment, levels = c("Cells_Control", "Cells_TNFa")))
   
 
 p1 <- ggplot(DF_sub_ca, aes(x = Sample, y = Metabolite, fill = log2(Counts))) +
@@ -402,6 +402,79 @@ p1 <- ggplot(DF_sub_ca, aes(x = Sample, y = Metabolite, fill = log2(Counts))) +
 
 #heatmap_carbs <- plot_heatmap(count_data = DF_sub, metadata = metabolomics_metadata, Factor = "Treatment", response_variable = "Metabolite", log_transform = TRUE, high_color = "goldenrod2", low_color = "midnightblue") + theme(axis.text.x = element_text(angle = 30, hjust=1, vjust=1, size = 6))
 ```
+
+Heatmap for Cells_control vs Cels_TGFb
+```{r}
+#DF <- assign_hierarchy(count_data = DF, keep_unknowns = TRUE, identifier = "KEGG")
+#DF_carbs <- subset(DF, Class == "Carbohydrates")
+#listout samples which are for cells (control vs TNFa)
+Cells_Control <- c("X1_001","X2_002","X3_003", "X4_004", "X5_005","X6_006", "X7_007", "X8_008")
+Cells_TGFb <-c("X9_009", "X10_010","X11_011", "X12_012", "X13_013","X14_014", "X15_015", "X16_016")
+#tried scaling but removes the signals
+#DF_stats_ca[14:61] <- data.frame(scale(as.matrix(DF_stats_ca[14:61])))
+#generate first data subset of Cells samples only for TNFa and Controls
+DF_sub_cb <- DF_stats_cb %>% 
+    tibble::as.tibble() %>% 
+    dplyr::filter(log2FoldChange > 1.5 | log2FoldChange < -1.5 & 
+               padj < 0.05) %>%
+    select(Metabolite, all_of(Cells_Control), all_of(Cells_TGFb)) %>% 
+    tidyr::pivot_longer(!Metabolite, names_to = "Sample", values_to = "Counts" )
+
+#generate a subset of the metadata to match with the sample IDs (lazy way of labelling the columns)
+meta_sub <- metabolomics_metadata %>% 
+    select(Sample, Treatment) 
+
+DF_sub_cb <- inner_join(DF_sub_cb, meta_sub, by = "Sample") %>% 
+    select(Metabolite, Sample, Treatment, Counts) %>% 
+    mutate(Sample = factor(Sample, levels = c("X1_001","X2_002","X3_003", "X4_004", "X5_005","X6_006", "X7_007", "X8_008","X9_009", "X10_010","X11_011", "X12_012", "X13_013","X14_014", "X15_015", "X16_016"))) %>% 
+    mutate(Treatment = factor(Treatment, levels = c("Cells_Control","Cells_TGFb")))
+  
+
+p2 <- ggplot(DF_sub_cb, aes(x = Sample, y = Metabolite, fill = log2(Counts))) +
+  geom_tile(colour = " black") + 
+    scale_fill_gradientn(colors = rev(hcl.colors(25, "BuPu")), limits = c(0,20), breaks = c(0,5,10,15,20))+
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    facet_grid(~Treatment, scales='free_x', space="free_x")
+```
+ 
+ Heatmap with log2FC (TNFa and TGFb)
+ 
+```{r}
+DF <- assign_hierarchy(count_data = DF, keep_unknowns = TRUE, identifier = "KEGG")
+#DF_carbs <- subset(DF, Class == "Carbohydrates")
+#listout samples which are for cells (control vs TNFa)
+#tried scaling but removes the signals
+#DF_stats_ca[14:61] <- data.frame(scale(as.matrix(DF_stats_ca[14:61])))
+#generate first data subset of Cells samples only for TNFa and Controls
+DF_sub_ca_log <- DF_stats_ca %>% 
+    tibble::as.tibble() %>% 
+    dplyr::filter(log2FoldChange > 1.5 | log2FoldChange < -1.5 & 
+               padj < 0.05) %>%
+    select(Metabolite, log2FoldChange) 
+
+DF_sub_cb_log <- DF_stats_cb %>% 
+    tibble::as.tibble() %>% 
+    dplyr::filter(log2FoldChange > 1.5 | log2FoldChange < -1.5 & 
+               padj < 0.05) %>%
+    select(Metabolite, log2FoldChange) 
+   
+
+#generate a subset of the metadata to match with the sample IDs (lazy way of labelling the columns)
+meta_sub <- metabolomics_metadata %>% 
+    select(Sample, Treatment) 
+
+DF_sub_log <- full_join(DF_sub_ca_log, DF_sub_cb_log, by = "Metabolite") %>% 
+    rename(TNFa = log2FoldChange.x, TGFb = log2FoldChange.y) %>% tidyr::pivot_longer(!Metabolite, names_to = "Sample", values_to = "log2FC" ) %>% mutate(Sample = factor(Sample, levels = c("TNFa", "TGFb")))
+
+p3 <- ggplot(DF_sub_log, aes(x = Sample, y = Metabolite, fill = log2FC)) +
+  geom_tile(colour = " black") + 
+    scale_fill_gradient2(low = "#0066CC", na.value = "white", high = "#FF0000")+
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + 
+    theme_bw()
+
+```
+ 
+ 
  with NA metabolites filtered (maybe no need to show this to Daisy)
  
 ```{r}
@@ -433,7 +506,7 @@ DF_sub_ca_2 <- inner_join(DF_sub_2, meta_sub, by = "Sample") %>%
     mutate(Treatment = factor(Treatment, levels = c("Cells_Control", "Cells_TNFa","Cells_TGFb")))
   
 
-p2 <- ggplot(DF_sub_ca_2, aes(x = Sample, y = Metabolite, fill = log2(Counts))) +
+p4 <- ggplot(DF_sub_ca_2, aes(x = Sample, y = Metabolite, fill = log2(Counts))) +
   geom_tile(colour = " black") + 
     scale_fill_gradientn(colors = rev(hcl.colors(25, "BuPu")),limits = c(0,20), breaks = c(0,5,10,15,20) )  + 
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
