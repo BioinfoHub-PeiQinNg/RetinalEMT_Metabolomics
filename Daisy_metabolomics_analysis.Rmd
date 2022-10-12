@@ -53,7 +53,8 @@ metabolomics_metadata <- read.csv("metabolics_metadata.csv")
 
 metabolomics_metadata <- mutate_if(metabolomics_metadata, 
                                    is.character, as.factor) %>%
-                        subset(select = -c(X)) %>%as.data.frame()
+                        subset(select = -c(X)) %>%as.data.frame() %>%
+                        filter(Sample != "X10_010")
 
 metabolomics_count_dataframe_all  <- metabolomics_count_dataframe %>% 
                                      subset(select = -c(X,ret.index,
@@ -166,6 +167,9 @@ DF <- assign_hierarchy(metabolomics_count_dataframe_all,
                        keep_unknowns = FALSE, 
                        identifier = "KEGG" ) 
 
+#remove sample 10 from the data
+
+DF <- DF %>% subset(select=-c(X10_010))
 
 DF_stats_ca <-omu_summary(count_data = DF , 
             metadata = metabolomics_metadata, 
@@ -208,6 +212,7 @@ Repeat the analysis for the following comparisons
 2)Cells_TGFb vs Cells_Control
 
 ```{r}
+
 DF_stats_cb <-omu_summary(count_data = DF , 
             metadata = metabolomics_metadata, 
             numerator = "Cells_TGFb", 
@@ -409,7 +414,7 @@ Heatmap for Cells_control vs Cels_TGFb
 #DF_carbs <- subset(DF, Class == "Carbohydrates")
 #listout samples which are for cells (control vs TNFa)
 Cells_Control <- c("X1_001","X2_002","X3_003", "X4_004", "X5_005","X6_006", "X7_007", "X8_008")
-Cells_TGFb <-c("X9_009", "X10_010","X11_011", "X12_012", "X13_013","X14_014", "X15_015", "X16_016")
+Cells_TGFb <-c("X9_009","X11_011", "X12_012", "X13_013","X14_014", "X15_015", "X16_016") #remove sample 10 which is an outlier
 #tried scaling but removes the signals
 #DF_stats_ca[14:61] <- data.frame(scale(as.matrix(DF_stats_ca[14:61])))
 #generate first data subset of Cells samples only for TNFa and Controls
@@ -426,13 +431,13 @@ meta_sub <- metabolomics_metadata %>%
 
 DF_sub_cb <- inner_join(DF_sub_cb, meta_sub, by = "Sample") %>% 
     select(Metabolite, Sample, Treatment, Counts) %>% 
-    mutate(Sample = factor(Sample, levels = c("X1_001","X2_002","X3_003", "X4_004", "X5_005","X6_006", "X7_007", "X8_008","X9_009", "X10_010","X11_011", "X12_012", "X13_013","X14_014", "X15_015", "X16_016"))) %>% 
+    mutate(Sample = factor(Sample, levels = c("X1_001","X2_002","X3_003", "X4_004", "X5_005","X6_006", "X7_007", "X8_008","X9_009","X11_011", "X12_012", "X13_013","X14_014", "X15_015", "X16_016"))) %>% 
     mutate(Treatment = factor(Treatment, levels = c("Cells_Control","Cells_TGFb")))
   
 
 p2 <- ggplot(DF_sub_cb, aes(x = Sample, y = Metabolite, fill = log2(Counts))) +
   geom_tile(colour = " black") + 
-    scale_fill_gradientn(colors = rev(hcl.colors(25, "BuPu")), limits = c(0,20), breaks = c(0,5,10,15,20))+
+    scale_fill_gradientn(colors = rev(hcl.colors(25, "BuPu")), limits = c(0,18), breaks = c(0,5,10,15,20))+
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
     facet_grid(~Treatment, scales='free_x', space="free_x")
 ```
@@ -474,8 +479,8 @@ p3 <- ggplot(DF_sub_log, aes(x = Sample, y = Metabolite, fill = log2FC)) +
 
 ```
  
- 
- with NA metabolites filtered (maybe no need to show this to Daisy)
+
+with NA metabolites filtered (maybe no need to show this to Daisy)
  
 ```{r}
 #Need to rewrite the code for the heatmap
