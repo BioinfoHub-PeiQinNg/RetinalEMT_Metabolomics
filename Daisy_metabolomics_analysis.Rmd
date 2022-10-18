@@ -137,7 +137,7 @@ PCA plots for each of these group in cells
 ```{r}
 pca_res <- prcomp(sqrt(cells_counts_Df), center = TRUE, scale. = TRUE)
 
-df <-as.data.frame(pca_res$x) %>% rownames_to_column("Sample") %>% mutate(Treatments = cells_comb_data$Treatment) %>% select(Sample,Treatments, PC1:PC24)
+df <-as.data.frame(pca_res$x) %>% rownames_to_column("Sample") %>% mutate(Treatments = cells_comb_data$Treatment) %>% select(Sample,Treatments, PC1:PC23)
 
 
 ggplot(df, aes(PC1, PC2, colour = factor(Treatments))) + 
@@ -491,7 +491,7 @@ with NA metabolites filtered (maybe no need to show this to Daisy)
 #listout samples which are for cells (control vs TNFa)
 Cells_Control <- c("X1_001","X2_002","X3_003", "X4_004", "X5_005","X6_006", "X7_007", "X8_008")
 Cells_TNFa <- c("X17_017", "X18_018","X19_019","X20_020","X21_021", "X22_022","X23_023","X24_024")
-Cells_TGFb <-c("X9_009", "X10_010","X11_011", "X12_012", "X13_013","X14_014", "X15_015", "X16_016")
+Cells_TGFb <-c("X9_009","X11_011", "X12_012", "X13_013","X14_014", "X15_015", "X16_016")
 
 #generate first data subset of Cells samples only for TNFa and Controls
 DF_sub_2 <- DF_stats_ca %>% 
@@ -507,7 +507,7 @@ meta_sub <- metabolomics_metadata %>%
 
 DF_sub_ca_2 <- inner_join(DF_sub_2, meta_sub, by = "Sample") %>% 
     select(Metabolite, Sample, Treatment, Counts) %>% 
-    mutate(Sample = factor(Sample, levels = c("X1_001","X2_002","X3_003", "X4_004", "X5_005","X6_006", "X7_007", "X8_008", "X17_017", "X18_018","X19_019","X20_020","X21_021", "X22_022","X23_023","X24_024","X9_009", "X10_010","X11_011", "X12_012", "X13_013","X14_014", "X15_015", "X16_016"))) %>% 
+    mutate(Sample = factor(Sample, levels = c("X1_001","X2_002","X3_003", "X4_004", "X5_005","X6_006", "X7_007", "X8_008", "X17_017", "X18_018","X19_019","X20_020","X21_021", "X22_022","X23_023","X24_024","X9_009","X11_011", "X12_012", "X13_013","X14_014", "X15_015", "X16_016"))) %>% 
     mutate(Treatment = factor(Treatment, levels = c("Cells_Control", "Cells_TNFa","Cells_TGFb")))
   
 
@@ -517,4 +517,166 @@ p4 <- ggplot(DF_sub_ca_2, aes(x = Sample, y = Metabolite, fill = log2(Counts))) 
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
     facet_grid(~Treatment, scales='free_x', space="free_x") 
 ```
+Box plots
+
+```{r}
+
+DF_ca_box <- DF_stats_ca %>% 
+    tibble::as.tibble() %>% 
+    dplyr::filter(log2FoldChange >= 1.0 | log2FoldChange < -1.0 & 
+               padj < 0.05) %>%
+    select(Metabolite, all_of(Cells_TNFa), all_of(Cells_Control), Class) %>% 
+    tidyr::pivot_longer(!c(Metabolite,Class), names_to = "Sample", values_to = "Counts" ) 
+
+DF_ca_box_final <- inner_join(DF_ca_box, meta_sub, by = "Sample") %>% 
+    select(Metabolite, Sample, Treatment, Counts, Class) %>% 
+    mutate(Treatment = factor(Treatment, levels = c("Cells_Control", "Cells_TNFa"))) %>% filter(Class == 'Organic acids' |Class == 'Lipids' |Class == 'Nucleic acids') %>% group_by(Class)
+
+DF_ca_box_final$Metabolite = factor(DF_ca_box_final$Metabolite, levels=c("arachidonic acid","adenosine" ,"adenosine-5-monophosphate" , "uridine" , "4-hydroxyphenylacetic acid", "lactic acid", "malonic acid", "parabanic acid"   ))
+#Plot the box plot
+ggplot(DF_ca_box_final, aes(x = Treatment, y=log(Counts), color = Treatment)) + 
+  geom_boxplot() +theme_bw() + facet_wrap(Metabolite ~ Class, nrow = 2) + theme(axis.text.x = element_text(angle = 90, hjust=1))
+
+
+```
+ Box plot for TGFb
  
+```{r}
+DF_cb_box <- DF_stats_cb %>% 
+    tibble::as.tibble() %>% 
+    dplyr::filter(log2FoldChange > 1.0 | log2FoldChange < -1.0 & 
+               padj < 0.05) %>%
+    select(Metabolite, all_of(Cells_TGFb), all_of(Cells_Control), Class) %>% 
+    tidyr::pivot_longer(!c(Metabolite,Class), names_to = "Sample", values_to = "Counts" )
+
+DF_cb_box_final <- inner_join(DF_cb_box, meta_sub, by = "Sample") %>% 
+    select(Metabolite, Sample, Treatment, Counts, Class) %>% 
+    mutate(Treatment = factor(Treatment, levels = c("Cells_Control", "Cells_TGFb"))) %>% filter(Class == 'Organic acids' | Class == 'Lipids' )
+
+#Plot the box plot
+ggplot(DF_cb_box_final, aes(x=Treatment, y=log(Counts), color = Treatment)) + 
+  geom_boxplot() +theme_bw() + scale_colour_manual(values=c("#F8766D", "#7CAE00")) + facet_wrap(~) + theme(axis.text.x = element_text(angle = 45, hjust=1))
+```
+ 
+
+KEGG enrichment pathway analysis using FELLA 
+
+```{r}
+library(FELLA)
+library(RCy3)
+library(igraph)
+#build a KEGG database locally using the FELLA package
+graph <- buildGraphFromKEGGREST(
+organism = "hsa",
+filter.path = c("01100", "01200", "01210", "01212", "01230"))
+
+#store object in tmpdir on local machine
+tmpdir <- paste0(tempdir(), "/my_database")
+unlink(tmpdir, recursive = TRUE)
+
+buildDataFromGraph(
+keggdata.graph = graph,
+databaseDir = tmpdir,
+internalDir = FALSE,
+matrices = "diffusion",
+normality = "diffusion",
+niter = 50)
+
+#load the KEGG database as FELLA data
+fella.data <- loadKEGGdata(
+databaseDir = tmpdir,
+internalDir = FALSE,
+loadMatrix = "diffusion"
+ )
+
+#For TNFa only, only primary metabolites with kEGG terms will be included
+DF_stats_ca_KEGG <- DF_stats_ca %>% 
+    tibble::as_tibble() %>% 
+    dplyr::filter(log2FoldChange > 1.0 | log2FoldChange < -1.0 & 
+               padj < 0.05) %>% filter(KEGG != "NA") %>% dplyr::select('Metabolite', 'KEGG', 'log2FoldChange')
+
+compounds.TNFa <- DF_stats_ca_KEGG$KEGG
+
+analysis.TNFa <- defineCompounds(
+compounds = compounds.TNFa,
+data = fella.data)
+
+getInput(analysis.TNFa)
+getExcluded(analysis.TNFa) #three compounds get excluded from the analysis
+
+
+#run diffusion
+analysis.TNFa <- runDiffusion(
+object = analysis.TNFa,
+data = fella.data,
+approx = "normality")
+
+nlimit <- 150
+vertex.label.cex <- .4
+plot(
+analysis.TNFa,
+method = "diffusion",
+data = fella.data,
+nlimit = nlimit,
+vertex.label.cex = vertex.label.cex)
+```
+
+Export the generated graph as igraph object to then be edited on Cytoscape
+```{r}
+g <- generateResultsGraph(
+object = analysis.TNFa,
+method = "diffusion",
+nlimit = nlimit,
+data = fella.data)
+
+#generate results table
+tab.all <- generateResultsTable(
+method = "diffusion",
+nlimit = 150,
+object = analysis.TNFa,
+data = fella.data)
+
+```
+
+for TGFb
+
+```{r}
+#For TNFa only, only primary metabolites with kEGG terms will be included
+DF_stats_cb_KEGG <- DF_stats_cb %>% 
+    tibble::as_tibble() %>% 
+    dplyr::filter(log2FoldChange > 1.0 | log2FoldChange < -1.0 & 
+               padj < 0.05) %>% filter(KEGG != "NA") %>% dplyr::select('Metabolite', 'KEGG', 'log2FoldChange')
+
+compounds.TGFb <- DF_stats_cb_KEGG$KEGG
+
+analysis.TGFb <- defineCompounds(
+compounds = compounds.TGFb,
+data = fella.data)
+
+getInput(analysis.TGFb)
+getExcluded(analysis.TGFb) #three compounds get excluded from the analysis
+
+
+#run diffusion
+analysis.TGFb <- runDiffusion(
+object = analysis.TGFb,
+data = fella.data,
+approx = "normality")
+
+nlimit <- 150
+vertex.label.cex <- .4
+plot(
+analysis.TGFb,
+method = "diffusion",
+data = fella.data,
+nlimit = nlimit,
+vertex.label.cex = vertex.label.cex)
+
+#generate results table
+tab.all.TGFb <- generateResultsTable(
+method = "diffusion",
+nlimit = 100,
+object = analysis.TGFb,
+data = fella.data)
+```
+
