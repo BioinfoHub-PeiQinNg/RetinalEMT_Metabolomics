@@ -161,6 +161,38 @@ ggplot(df_2, aes(PC1, PC2, colour = factor(Treatments))) +
   theme_bw() + labs(colour = "Groups") 
 ```
 
+To further validate the sample clustering, we use PLSDA 
+
+Source: 
+for mdatools
+https://mdatools.com/docs/plsda-classification-plots.html
+
+For types of analysis:
+
+https://metabolomics.se/Courses/MVA/MVA%20in%20Omics_Handouts_Exercises_Solutions_Thu-Fri.pdf
+
+For cells metabolite samples:
+```{r}
+cells_counts_Df_names <- tibble::rownames_to_column(cells_counts_Df) %>% select(rowname) %>% mutate(Treatments = cells_comb_data$Treatment) %>% select(Treatments) %>% droplevels(except = c("Cells_Control", "Cells_TGFb", "Cells_TNFa"))  %>% as.list() 
+
+m.all <- plsda(cells_counts_Df,cells_counts_Df_names$Treatments)
+summary(m.all)
+plot(m.all, nc = 1)
+plotPredictions(m.all)
+```
+For media metabolite samples:
+
+```{r}
+media_counts_Df_names <- tibble::rownames_to_column(media_counts_Df) %>% select(rowname) %>% mutate(Treatments = media_comb_data$Treatment) %>% select(Treatments) %>% droplevels(except = c("Media_Con", "Media_TGFb", "Media_TNFa"))  %>% as.list() 
+
+m.all.2 <- plsda(media_counts_Df,media_counts_Df_names$Treatments)
+summary(m.all.2)
+plot(m.all.2, nc = 1)
+plotPredictions(m.all.2)
+```
+
+
+
 Assigns hierarchy metadata to a metabolomics count matrix using identifier values. 
 It can assign KEGG compound hierarchy, orthology hierarchy, or organism hierarchy data.
 
@@ -497,7 +529,7 @@ p3 <- ggplot(DF_sub_log, aes(x = Sample, y = Metabolite, fill = log2FC)) +
 ```
  
 
-with NA metabolites filtered (maybe no need to show this to Daisy)
+Heatmap to show primary metabolites for all samples.
  
 ```{r}
 #Need to rewrite the code for the heatmap
@@ -511,10 +543,9 @@ Cells_TNFa <- c("X17_017", "X18_018","X19_019","X20_020","X21_021", "X22_022","X
 Cells_TGFb <-c("X9_009","X11_011", "X12_012", "X13_013","X14_014", "X15_015", "X16_016")
 
 #generate first data subset of Cells samples only for TNFa and Controls
-DF_sub_2 <- DF_stats_ca %>% 
+DF_sub_2 <- DF %>% 
     tibble::as.tibble() %>% 
-    dplyr::filter(log2FoldChange > 1.0 | log2FoldChange < -1.0 & 
-               padj < 0.05) %>% filter(Class != "NA") %>%
+    dplyr::filter(str_detect(Metabolite,pattern = "[:alpha:]")) %>% 
     select(Metabolite, all_of(Cells_TNFa), all_of(Cells_Control), all_of(Cells_TGFb)) %>% 
     tidyr::pivot_longer(!Metabolite, names_to = "Sample", values_to = "Counts" )
 
@@ -522,17 +553,29 @@ DF_sub_2 <- DF_stats_ca %>%
 meta_sub <- metabolomics_metadata %>% 
     select(Sample, Treatment) 
 
+
 DF_sub_ca_2 <- inner_join(DF_sub_2, meta_sub, by = "Sample") %>% 
     select(Metabolite, Sample, Treatment, Counts) %>% 
     mutate(Sample = factor(Sample, levels = c("X1_001","X2_002","X3_003", "X4_004", "X5_005","X6_006", "X7_007", "X8_008", "X17_017", "X18_018","X19_019","X20_020","X21_021", "X22_022","X23_023","X24_024","X9_009","X11_011", "X12_012", "X13_013","X14_014", "X15_015", "X16_016"))) %>% 
     mutate(Treatment = factor(Treatment, levels = c("Cells_Control", "Cells_TNFa","Cells_TGFb")))
-  
 
-p4 <- ggplot(DF_sub_ca_2, aes(x = Sample, y = Metabolite, fill = log2(Counts))) +
-  geom_tile(colour = " black") + 
-    scale_fill_gradientn(colors = rev(hcl.colors(25, "BuPu")),limits = c(0,20), breaks = c(0,5,10,15,20) )  + 
+
+matrix_df <- DF %>% 
+    tibble::as.tibble() %>% 
+    dplyr::filter(str_detect(Metabolite,pattern = "[:alpha:]")) %>% 
+    select(Metabolite, all_of(Cells_TNFa), all_of(Cells_Control), all_of(Cells_TGFb)) %>% t()
+
+m <- as.matrix(matrix_df[, -1]) # -1 to omit categories from matrix
+
+# Cluster based on euclidean distance
+clust <- hclust(dist(t(m)))
+
+p4 <- ggplot(DF_sub_ca_2, aes(x = Sample, y = Metabolite)) +
+  geom_tile(colour = " black", aes(fill = log2(Counts)))   + 
+    scale_fill_viridis(option = "magma")+
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
-    facet_grid(~Treatment, scales='free_x', space="free_x") 
+    facet_grid(~Treatment, scales='free_x', space="free_x") +
+    scale_y_discrete(limits = colnames(m)[clust$order])
 ```
 Box plots
 
@@ -552,7 +595,7 @@ DF_ca_box_final <- inner_join(DF_ca_box, meta_sub, by = "Sample") %>%
 DF_ca_box_final$Metabolite = factor(DF_ca_box_final$Metabolite, levels=c("arachidonic acid","adenosine" ,"adenosine-5-monophosphate" , "uridine" , "4-hydroxyphenylacetic acid", "lactic acid", "malonic acid", "parabanic acid"   ))
 #Plot the box plot
 ggplot(DF_ca_box_final, aes(x = Treatment, y=log(Counts), color = Treatment)) + 
-  geom_boxplot() +theme_bw() + facet_wrap(Metabolite ~ Class, nrow = 2) + theme(axis.text.x = element_text(angle = 90, hjust=1))
+  geom_boxplot() +theme_bw() + facet_wrap(Metabolite ~ Class, nrow = 4) + theme(axis.text.x = element_text(angle = 90, hjust=1))
 
 
 ```
@@ -571,9 +614,9 @@ DF_cb_box <- DF_stats_cb %>%
 
 DF_cb_box_final <- inner_join(DF_cb_box, meta_sub, by = "Sample") %>% 
     select(Metabolite, Sample, Treatment, Counts, Class) %>% 
-    mutate(Treatment = factor(Treatment, levels = c("Cells_Control", "Cells_TGFb"))) %>% filter(Class == 'Organic acids' | Class == 'Lipids' )
+    mutate(Treatment = factor(Treatment, levels = c("Cells_Control", "Cells_TGFb"))) %>% filter(Class == 'Organic acids' | Class == 'Lipids' | Class == 'Nucleic acids')
 
-DF_cb_box_final$Metabolite = factor(DF_cb_box_final$Metabolite, levels=c("linoleic acid","palmitoleic acid" ,"4-hydroxyphenylacetic acid","malonic acid","vanillic acid", "malic acid"))
+DF_cb_box_final$Metabolite = factor(DF_cb_box_final$Metabolite, levels=c("linoleic acid","palmitoleic acid" ,"4-hydroxyphenylacetic acid","malonic acid","vanillic acid", "malic acid", "urea"))
 
 #Plot the box plot
 ggplot(DF_cb_box_final, aes(x=Treatment, y=log(Counts), color = Treatment)) + 
@@ -619,7 +662,7 @@ DF_cb_box_stacked <- DF_cb_box_stacked %>%
 
 DF_stacked_bar <- bind_rows(DF_ca_box_stacked, DF_cb_box_stacked ) %>% 
     select(Metabolite,Treatment,Class, freq) %>% 
-    rename (percentage = freq)
+    rename (percentage = freq) %>% group_by(Class)
 
 DF_stacked_bar$Treatment <- factor(DF_stacked_bar$Treatment, levels = c("Cells_TGFb","Cells_TNFa"))
 
@@ -750,9 +793,6 @@ method = "diffusion",
 nlimit = 160,
 object = analysis.TGFb,
 data = fella.data)
-
-
-
 
 ```
 
